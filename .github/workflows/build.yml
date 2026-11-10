@@ -1,0 +1,44 @@
+name: Build VST3 plugins
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist | Out-Null
+          Copy-Item -Recurse build/Crush_artefacts/Release/VST3/Crush.vst3 dist/Crush.vst3
+          Copy-Item -Recurse build/Lock_artefacts/Release/VST3/Lock.vst3 dist/Lock.vst3
+          @'
+          @echo off
+          net session >nul 2>&1
+          if %errorlevel% neq 0 (
+            echo Right-click this file and choose Run as administrator
+            pause
+            exit /b
+          )
+          xcopy /E /I /Y "%~dp0Crush.vst3" "C:\Program Files\Common Files\VST3\Crush.vst3"
+          xcopy /E /I /Y "%~dp0Lock.vst3" "C:\Program Files\Common Files\VST3\Lock.vst3"
+          echo.
+          echo Done. Now rescan plugins in FL Studio.
+          pause
+          '@ | Set-Content dist/INSTALL.bat -Encoding ascii
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Plugins-VST3-Windows
+          path: dist
